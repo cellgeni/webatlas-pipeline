@@ -1,0 +1,32 @@
+outdir: /lustre/scratch127/cellgen/cellgeni/tickets/tic-4528/actions/tangram_integration/webatlas/wa_out
+
+args:
+  h5ad:
+    compute_embeddings: True
+
+projects:
+  - project: test
+    datasets:
+      - dataset: xenium
+        title: "Test Xenium Dataset AT10-BRA-5-FO-1-S47-i"
+        url: "https://webatlas.sanger.ac.uk/s3/test_datasets/testing_nf_xenium_out/"
+        data:
+          - data_type: h5ad
+            data_path: /lustre/scratch127/cellgen/cellgeni/tickets/tic-4528/actions/tangram_integration/workflow_out_2/analysis_bundle_output-XETG00055__0027377__AT10-BRA-5-FO-1-S47-i__20241031__140902/spatial_with_tangram_celltypes.h5ad
+          - data_type: raw_image
+            data_path: /lustre/scratch127/cellgen/cellgeni/tickets/tic-4528/data/output-XETG00439__0068022__DA45-END-0-FO-2-S2-i__20260212__125022/morphology_focus
+          - data_type: label_image_data
+            data_path: /lustre/scratch127/cellgen/cellgeni/tickets/tic-4528/data/output-XETG00439__0068022__DA45-END-0-FO-2-S2-i__20260212__125022
+            file_type: xenium
+            ref_img: /lustre/scratch127/cellgen/cellgeni/tickets/tic-4528/data/output-XETG00439__0068022__DA45-END-0-FO-2-S2-i__20260212__125022/morphology_focus
+
+vitessce_options:
+  spatial:
+    xy: "obsm/X_spatial"
+  mappings:
+    obsm/X_umap: [0, 1]
+    obsm/X_pca: [0, 1]
+  sets:
+    - "obs/tangram_ct_max"
+  matrix: "X"
+layout: advanced

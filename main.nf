@@ -116,36 +116,64 @@ def warnParams () {
 //////////////////////////////////////////////////////
 
 process image_to_zarr {
-    tag "${image}"
-    debug verbose_log
+  tag "${image}"
+  debug verbose_log
 
-    publishDir outdir_with_version, mode: "copy"
+  publishDir outdir_with_version, mode: "copy"
+  stageInMode 'copy'
 
-    input:
-    tuple val(stem), val(prefix), val(img_type), path(image), val(keep_filename)
+  input:
+  tuple val(stem), val(prefix), val(img_type), path(image), val(keep_filename)
 
-    output:
-    tuple val(stem), val(img_type), path("${filename}.zarr"), emit: img_zarr
-    tuple val(stem), val(img_type), path("${filename}.zarr/OME/METADATA.ome.xml"), emit: ome_xml
+  output:
+  tuple val(stem), val(img_type), path("${filename}.zarr"), emit: img_zarr
+  tuple val(stem), val(img_type), path("${filename}.zarr/OME/METADATA.ome.xml"), emit: ome_xml
 
-    script:
-    filename = keep_filename ? image.baseName : ([*stem, prefix, img_type] - null - "").join("-")
-    """
-    if tiffinfo ${image} | grep "Compression Scheme:" | grep -wq "JPEG"
-    then
-        if od -h -j2 -N2 ${image} | head -n1 | sed 's/[0-9]*  *//' | grep -q -E '002b|2b00'
-        then
-            tiffcp -c none -m 0 -8 ${image} uncompressed.tif
-        else
-            tiffcp -c none -m 0 ${image} uncompressed.tif || tiffcp -c none -m 0 -8 ${image} uncompressed.tif
-        fi
-        bioformats2raw --no-hcs uncompressed.tif ${filename}.zarr
-    else
-        bioformats2raw --no-hcs ${image} ${filename}.zarr
-    fi
-    consolidate_md.py ${filename}.zarr
-    """
+  script:
+  filename = keep_filename
+      ? (image.isFile() ? image.baseName.replaceAll(/\.ome\.tif$/,'') : image.name)
+      : ([*stem, prefix, img_type] - null - "").join("-")
+
+  """
+  set -euo pipefail
+
+  INPUT="${image}"
+
+  # If a directory was provided, pick a representative file within it.
+  if [ -d "\$INPUT" ]; then
+      echo "[image_to_zarr] INPUT is a directory; selecting representative OME-TIFF inside"
+      CAND=\$(ls -1 "\$INPUT"/*_0000.ome.tif 2>/dev/null | head -n1 || true)
+      if [ -z "\$CAND" ]; then
+          CAND=\$(ls -1 "\$INPUT"/*.ome.tif 2>/dev/null | head -n1 || true)
+      fi
+      if [ -z "\$CAND" ]; then
+          CAND=\$(ls -1 "\$INPUT"/*.tif 2>/dev/null | head -n1 || true)
+      fi
+      if [ -z "\$CAND" ]; then
+          echo "[image_to_zarr] ERROR: No .ome.tif/.tif files found in directory: \$INPUT" >&2
+          exit 1
+      fi
+      echo "[image_to_zarr] Using file: \$CAND"
+      INPUT="\$CAND"
+  fi
+
+  # TIFF/JPEG branch only if tiffinfo works and reports JPEG compression
+  if tiffinfo "\$INPUT" >/dev/null 2>&1 && tiffinfo "\$INPUT" | grep -F "Compression Scheme:" | grep -qw "JPEG"; then
+      if od -h -j2 -N2 "\$INPUT" | head -n1 | sed 's/[0-9]*  *//' | grep -q -E '002b|2b00'; then
+          tiffcp -c none -m 0 -8 "\$INPUT" uncompressed.tif
+      else
+          tiffcp -c none -m 0 "\$INPUT" uncompressed.tif || tiffcp -c none -m 0 -8 "\$INPUT" uncompressed.tif
+      fi
+      bioformats2raw --no-hcs uncompressed.tif "${filename}.zarr"
+  else
+      bioformats2raw --no-hcs "\$INPUT" "${filename}.zarr"
+  fi
+
+  consolidate_md.py "${filename}.zarr"
+  """
 }
+
+
 
 process ome_zarr_metadata{
     tag "${zarr}, ${img_type}"
@@ -209,6 +237,9 @@ process Build_config {
     options_str = config_map.options ? "--options '" + (config_map.options instanceof String ? options : new JsonBuilder(config_map.options).toString()) + "'" : ""
     clayout_str = config_map.custom_layout?.trim() ? "--custom_layout \"${config_map.custom_layout}\"" : ""
     """
+    export MPLCONFIGDIR="\${PWD}/.matplotlib"
+    mkdir -p "\${MPLCONFIGDIR}"
+    
     build_config.py \
         --project "${stem[0]}" \
         --dataset "${stem[1]}" \
@@ -248,30 +279,57 @@ process write_spatialdata {
 }
 
 process Generate_image {
-    tag "${stem}, ${img_type}, ${file_path}"
-    debug verbose_log
+  tag "${stem}, ${img_type}, ${file_path}"
+  debug verbose_log
 
-    publishDir outdir_with_version, mode: "copy", enabled: params.publish_generated_img
+  publishDir outdir_with_version, mode: "copy", enabled: params.publish_generated_img
 
-    input:
-    tuple val(stem), val(prefix), val(img_type), path(file_path), val(file_type), path(ref_img), val(args)
+  input:
+  tuple val(stem), val(prefix), val(img_type), path(file_path), val(file_type), path(ref_img), val(args)
 
-    output:
-    tuple val(stem), val(prefix), val(img_type), path("${stem_str}*.tif")
+  output:
+  tuple val(stem), val(prefix), val(img_type), path("${stem_str}*.tif")
 
-    script:
-    stem_str = ([*stem, prefix] - null - "").join("-")
-    ref_img_str = ref_img.name != "NO_REF" ? "--ref_img ${ref_img}" : ""
-    args_str = args ? "--args '" + new JsonBuilder(args).toString() + "'" : "--args {}"
-    """
-    generate_image.py \
-        --stem ${stem_str} \
-        --img_type ${img_type} \
-        --file_type ${file_type} \
-        --file_path ${file_path} \
-        ${ref_img_str} ${args_str}
-    """
+  script:
+  stem_str    = ([*stem, prefix] - null - "").join("-")
+  args_str    = args ? "--args '" + new JsonBuilder(args).toString() + "'" : "--args '{}'"
+  // we’ll build ref_img_str below in bash after resolving directory->file
+  """
+  set -euo pipefail
+  set -x
+  trap 'echo "[Generate_image] Caught signal, exiting (130)"; exit 130' INT TERM
+
+  REF_ARG=""
+  if [ "${ref_img.name}" != "NO_REF" ]; then
+    REF_IN="${ref_img}"
+    if [ -d "\$REF_IN" ]; then
+      echo "[Generate_image] ref_img is a directory; selecting a representative OME-TIFF inside"
+      CAND=\$(ls -1 "\$REF_IN"/*_0000.ome.tif 2>/dev/null | head -n1 || true)
+      [ -z "\$CAND" ] && CAND=\$(ls -1 "\$REF_IN"/*.ome.tif 2>/dev/null | head -n1 || true)
+      [ -z "\$CAND" ] && CAND=\$(ls -1 "\$REF_IN"/*.tif     2>/dev/null | head -n1 || true)
+      if [ -n "\$CAND" ]; then
+        echo "[Generate_image] Using reference file: \$CAND"
+        REF_ARG="--ref_img \$CAND"
+      else
+        echo "[Generate_image] WARNING: No *.ome.tif/*.tif found in ref_img dir: \$REF_IN" >&2
+      fi
+    else
+      REF_ARG="--ref_img \$REF_IN"
+    fi
+  fi
+
+  # Run with normal import path (bin/ contains process_*.py)
+  export PYTHONPATH="${projectDir}/bin"
+
+  python -s "\$(command -v generate_image.py)" \\
+      --stem ${stem_str} \\
+      --img_type ${img_type} \\
+      --file_type ${file_type} \\
+      --file_path ${file_path} \\
+      \$REF_ARG ${args_str}
+  """
 }
+
 
 //////////////////////////////////////////////////////
 
@@ -342,18 +400,19 @@ workflow Process_images {
 
     // Map tif inputs to:
     // tuple val(stem), val(prefix), val(img_type), path(image)
-    img_tifs = inputs.images.filter { stem, data_map ->
-        data_map.data_type in ["raw_image", "label_image"]
-    }
-    .map { stem, data_map ->
-        [ 
+    img_tifs = inputs.images
+        .filter { stem, data_map -> data_map.data_type in ["raw_image", "label_image"] }
+        .map { stem, data_map ->
+            def p = file(data_map.data_path)
+            def dir = p.isDirectory() ? p : p.getParent()   // <-- DIRECTORY carrying all channels
+            [
             stem,
             data_map.prefix,
             data_map.data_type.replace("_image",""),
-            file(data_map.data_path),
-            false // keep_filename
-        ]
-    }
+            dir,           // pass the folder
+            false          // keep_filename
+            ]
+        }
 
     // Map raw/label data inputs to:
     // tuple val(stem), val(prefix), val(img_type), path(file_path), val(file_type), path(ref_img), val(args)
