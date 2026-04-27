@@ -20,9 +20,14 @@ from process_h5ad import h5ad_to_zarr, subset_anndata
 from add_var_xenium import add_factors_to_adata_by_position as add_var_to_adata
 
 
-def add_csv_to_adata_obs(adata_obs, annotations_path, annotations_column_index, annotation_rename_column):
-    annot_df = pd.read_csv(annotations_path)
-    if annotation_rename_column!=[]:
+def add_csv_to_adata_obs(adata_obs, annotations_path, annotations_column_index, annotation_rename_column=None):
+    annotation_name = Path(annotations_path).name.lower()
+    is_anndata_file = annotation_name.endswith(".h5ad") or annotation_name.endswith(".h5ad.gz") or annotation_name.endswith(".ad")
+    if is_anndata_file:
+        annot_df = sc.read_h5ad(annotations_path).obs.copy()
+    else:
+        annot_df = pd.read_csv(annotations_path)
+    if annotation_rename_column:
         for pair_rename in annotation_rename_column:
             annot_df = annot_df.rename(columns={pair_rename[0]: pair_rename[1]})
     if annotations_column_index in annot_df.columns:
@@ -33,11 +38,21 @@ def add_csv_to_adata_obs(adata_obs, annotations_path, annotations_column_index, 
             # Replace index of df1 with index of df2
             annot_df.index = adata_obs.index
     else:
-        #using simply first column if none were specified
-        annot_df.set_index(annot_df.columns[0], inplace=True)
+        # For tabular files we can use the first column as an index fallback.
+        # For AnnData `.obs`, preserve its existing index.
+        if not is_anndata_file:
+            annot_df.set_index(annot_df.columns[0], inplace=True)
     
     #adata_obs.set_index('cell_id', inplace=True)
-    adata_obs = pd.merge(adata_obs, annot_df, left_index=True, right_index=True, how='left')
+    annot_df = annot_df[~annot_df.index.duplicated(keep='first')]
+    adata_obs = pd.merge(adata_obs, annot_df, left_index=True, right_index=True, how='left').fillna(np.nan)
+    for col in adata_obs.select_dtypes(include=["category"]).columns:
+        if "" not in adata_obs[col].cat.categories:
+            adata_obs[col] = adata_obs[col].cat.add_categories("")
+            adata_obs[col] = adata_obs[col].fillna("")
+
+    for col in adata_obs.select_dtypes(include=["object"]).columns:
+        adata_obs[col] = adata_obs[col].fillna("")
     return adata_obs
     
 
