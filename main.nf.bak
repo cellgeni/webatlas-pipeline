@@ -404,12 +404,13 @@ workflow Process_images {
         .filter { stem, data_map -> data_map.data_type in ["raw_image", "label_image"] }
         .map { stem, data_map ->
             def p = file(data_map.data_path)
+            def dir = p.isDirectory() ? p : p.getParent()   // <-- DIRECTORY carrying all channels
             [
-                stem,
-                data_map.prefix,
-                data_map.data_type.replace("_image",""),
-                p,      // use exact data_path from raw_image / label_image
-                false    
+            stem,
+            data_map.prefix,
+            data_map.data_type.replace("_image",""),
+            dir,           // pass the folder
+            false          // keep_filename
             ]
         }
 

@@ -274,10 +274,14 @@ def xenium_label(
     # starting on v2.0 vertices change location
     print(sw_version)
     print(list(z.keys()))
-    if sw_version < 2.0:
+    try:
+        if sw_version < 2.0:
+            pols = z["polygon_vertices"][1]
+        else:
+            pols = z["polygon_sets"][1]["vertices"]
+    except:
+        #sometimes sw=2.0 still have "polygon_vertices" instead of "polygon_sets"...
         pols = z["polygon_vertices"][1]
-    else:
-        pols = z["polygon_sets"][1]["vertices"]
     
     print(shape)
     if len(shape)>2:
