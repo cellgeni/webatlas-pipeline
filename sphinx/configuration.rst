@@ -10,6 +10,7 @@ Currently, the WebAtlas pipeline can process several types of data files as well
 
 * `AnnData <https://anndata.readthedocs.io/en/latest/>`_ files (``h5ad``)
 * `SpaceRanger output <https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/overview>`_ files
+* Visium HD Space Ranger binned output
 * `Xenium output <https://www.10xgenomics.com/support/in-situ-gene-expression/documentation/steps/onboard-analysis/understanding-xenium-outputs>`_ files
 * MERSCOPE output
 * molecules data in ``csv``/``tsv`` files
@@ -302,7 +303,8 @@ For image files the supported image format is ``tif``.
 Images can be either raw images (microscopy images) or label images (containing segmentations).
 Additionally, label images can be generated and processed if provided with the necessary data.
 Label images can be generated for Visium data if provided with an ``h5ad`` file or
-SpaceRanger output directory, and Xenium and MERSCOPE if provided with their 
+SpaceRanger output directory, Visium HD data if provided with a Visium HD Space
+Ranger output directory or ``h5ad`` file, and Xenium and MERSCOPE if provided with their 
 respective output directories.
 Raw images can also be pre-processed, in the case of MERSCOPE data where the raw image channels
 are stored in separate ``tif`` files the pipeline can concatenate them to then convert them.
@@ -322,6 +324,8 @@ Supported values are:
       - Path to the ``h5ad`` file
     * - ``spaceranger``
       - Path to a SpaceRanger output directory
+    * - ``visiumhd``
+      - Path to a Visium HD Space Ranger ``outs`` directory, pipestance directory, or binned output directory
     * - ``xenium``
       - Path to a Xenium output directory
     * - ``merscope``
@@ -345,6 +349,7 @@ Supported values are:
         Possible inputs depend on the supported technology from which the data is obtained,
           
           * ``visium`` requires a path to an ``h5ad`` file or SpaceRanger output directory
+          * ``visiumhd`` requires a path to an ``h5ad`` file, Visium HD Space Ranger output directory, or binned output directory
           * ``xenium`` requires a path to a Xenium output directory
           * ``merscope`` requires a path to a MERSCOPE output directory
 
@@ -360,7 +365,7 @@ Each data item is defined with the following keys:
     * - ``data_type``
       - one of the supported types of files to be processed.
         
-        A type of data file: ``h5ad``, ``spaceranger``, ``molecules``, ``xenium``, ``merscope``,
+        A type of data file: ``h5ad``, ``spaceranger``, ``visiumhd``, ``molecules``, ``xenium``, ``merscope``,
         
         a type of image file ``raw_image``, ``label_image``,
         
@@ -400,7 +405,7 @@ extra keys should be defined
         or 
         
         ``label_image_data``
-      - ``visium``, ``xenium`` or ``merscope``.
+      - ``visium``, ``visiumhd``, ``xenium`` or ``merscope``.
     * - ``ref_img``
       - ``label_image_data``
       - (required if ``shape`` is not set) 
@@ -439,6 +444,12 @@ Possible values for each of the supported data types are as follows:
       load_clusters: "True" # set to `False` to disable loading the clusters from the `analysis` directory
       load_embeddings: "True" # set to `False` to disable loading the embeddings (UMAP, tSNE and PCA) from the `analysis` directory
       load_raw: "False" # set to `True` to load the raw count file instead of the filtered count file
+    visiumhd:
+      bin_size: "008um" # Visium HD bin size to load: "002um", "008um" or "016um". Defaults to "008um"
+      save_h5ad: "True" # save the intermediate h5ad to the output directory. Defaults to `False`
+      load_clusters: "True" # set to `False` to disable loading the clusters from the `analysis` directory when present
+      load_embeddings: "True" # set to `False` to disable loading the embeddings (UMAP, tSNE and PCA) when present
+      load_raw: "False" # set to `True` to load the raw count file instead of the filtered count file
     xenium:
       save_h5ad: "True" # save the intermediate h5ad to the output directory. Defaults to `False`
       spatial_as_pixel: "True" # convert spatial coordinates to pixel coordinates. Defaults to `True`
@@ -456,7 +467,7 @@ Possible values for each of the supported data types are as follows:
       x_col_idx: 1 # column index of the column for `x` coordinates in case `has_header` is `False`.
       y_col_idx: 2 # column index of the column for `y` coordinates in case `has_header` is `False`.
 
-Note that in the case of ``spaceranger``, ``xenium`` and ``merscope`` data, it initially gets converted 
+Note that in the case of ``spaceranger``, ``visiumhd``, ``xenium`` and ``merscope`` data, it initially gets converted 
 into an ``h5ad`` file and so when processed the ``args`` for ``h5ad`` also apply to them.
 If specifying ``args`` directly to a `data`_ item of these types
 you can define both the ``args`` for that specific ``data_type`` and ``h5ad``.
@@ -478,7 +489,7 @@ Example,
 Image-data files data types (files from which to generate image files or images that require preprocessing)
 ``raw_image_data`` and ``label_image_data`` take ``args`` at `data`_ level (no global, `project`_ or `dataset`_ defaults)
 depending on their ``file_type``.
-| Label images can be generated from data from ``file_type``'s ``visium``, ``xenium`` or ``merscope``.
+| Label images can be generated from data from ``file_type``'s ``visium``, ``visiumhd``, ``xenium`` or ``merscope``.
 | Raw images can be preprocess from ``file_type`` ``merscope``.
 
 Image-data files of type ``visium`` can take the following ``args``:
@@ -494,6 +505,22 @@ Image-data files of type ``visium`` can take the following ``args``:
         obs_subset: ["sample", ["sample_id_1"]] # optional `obs` column name an value(s) to subset the anndata object
         sample_id: ["sample_id_1"] # optional key within anndata.uns["spatial"]. Defaults to the first key.
         relative_size: "nspots" # optional key within anndata.obs that contains multipliers for the spot size. Only useful for data that has been preprocessed to merge spots or modify spots' sizes. Defaults to None.
+
+
+Image-data files of type ``visiumhd`` can take the following ``args``:
+
+.. code-block:: yaml
+
+  data:
+    -
+      data_type: label_image_data
+      data_path: /path/to/visiumhd/spaceranger/outs/
+      file_type: visiumhd
+      args:
+        bin_size: "008um" # Visium HD bin size to load: "002um", "008um" or "016um". Defaults to "008um"
+        obs_subset: ["in_tissue", [1]] # optional `obs` column name an value(s) to subset the anndata object
+        sample_id: ["sample_id_1"] # optional key within anndata.uns["spatial"]. Defaults to the first key.
+        relative_size: "n_bins" # optional key within anndata.obs that contains multipliers for the square side length. Defaults to None.
 
 
 Image-data files of type ``xenium`` can take the following ``args``:

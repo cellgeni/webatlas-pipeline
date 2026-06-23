@@ -12,6 +12,7 @@ import typing as T
 from process_h5ad import h5ad_to_zarr
 from process_molecules import tsv_to_json
 from process_spaceranger import spaceranger_to_zarr
+from process_visiumhd import visiumhd_to_zarr
 from process_merscope import merscope_to_zarr
 from process_xenium import xenium_to_zarr
 
@@ -34,6 +35,8 @@ def process(file_type: str, path: str, stem: str, args: dict[str, T.Any] = {}) -
 
     func_dict = {
         "spaceranger": spaceranger_to_zarr,
+        "visiumhd": visiumhd_to_zarr,
+        "visium_hd": visiumhd_to_zarr,
         "xenium": xenium_to_zarr,
         "merscope": merscope_to_zarr,
         "h5ad": h5ad_to_zarr,

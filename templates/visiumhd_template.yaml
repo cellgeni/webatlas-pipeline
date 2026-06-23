@@ -1,0 +1,41 @@
+outdir: ./output/
+
+args:
+  h5ad:
+    compute_embeddings: True
+  visiumhd:
+    bin_size: "008um"
+    save_h5ad: True
+
+projects:
+  - project: test
+    datasets:
+      - dataset: visiumhd
+        title: "Test Visium HD Dataset"
+        data:
+          - data_type: visiumhd
+            data_path: /path/to/test/visiumhd/spaceranger/outs/
+            args:
+              bin_size: "008um"
+          - data_type: raw_image
+            data_path: /path/to/visiumhd/raw_image.tif
+          - data_type: label_image_data
+            data_path: /path/to/test/visiumhd/spaceranger/outs/
+            file_type: visiumhd
+            ref_img: /path/to/visiumhd/raw_image.tif
+            args:
+              bin_size: "008um"
+
+vitessce_options:
+  spatial:
+    xy: "obsm/spatial"
+  mappings:
+    obsm/X_umap: [0, 1]
+    obsm/X_pca: [0, 1]
+  factors:
+    - "obs/in_tissue"
+  sets:
+    - "obs/clustering"
+  matrix: "X"
+layout: advanced
+# custom_layout: "spatial|((scatterplot/scatterplot)|(genes/cellSets))"

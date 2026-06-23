@@ -41,7 +41,7 @@ params.outdir_s3 = "cog.sanger.ac.uk/webatlas/"
 
 //////////////////////////////////////////////////////
 
-data_types = ["h5ad","spaceranger","xenium","merscope","molecules"]
+data_types = ["h5ad","spaceranger","visiumhd","visium_hd","xenium","merscope","molecules"]
 image_types = ["raw_image","label_image","raw_image_data","label_image_data"]
 vitessce_params = ["title","description","url","vitessce_options","layout","custom_layout"]
 
@@ -80,6 +80,8 @@ inputs.other
 
 interm_dt = [
     spaceranger: ["h5ad"],
+    visiumhd: ["h5ad"],
+    visium_hd: ["h5ad"],
     xenium: ["h5ad"],
     merscope: ["h5ad"]
 ]

@@ -26,6 +26,9 @@ Modules
 .. automodule:: process_spaceranger
     :members:
 
+.. automodule:: process_visiumhd
+    :members:
+
 .. automodule:: process_xenium
     :members:
 

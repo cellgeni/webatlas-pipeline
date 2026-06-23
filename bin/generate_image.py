@@ -10,6 +10,7 @@ import fire
 import typing as T
 import tifffile as tf
 from process_spaceranger import visium_label
+from process_visiumhd import visiumhd_label
 from process_xenium import xenium_label
 from process_merscope import merscope_label, merscope_raw
 
@@ -44,6 +45,8 @@ def create_img(
     if img_type == "label":
         if file_type == "visium":
             visium_label(stem, file_path, **args)
+        elif file_type in ["visiumhd", "visium_hd"]:
+            visiumhd_label(stem, file_path, **args)
         elif file_type == "merscope":
             merscope_label(stem, file_path, **args)
         elif file_type == "xenium":
